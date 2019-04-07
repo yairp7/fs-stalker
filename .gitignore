@@ -1,0 +1,15 @@
+gradlew*
+*.iml
+.gradle
+/local.properties
+.idea
+/gradle
+.DS_Store
+/build
+/obj
+/captures
+.externalNativeBuild
+**/*.iml
+**/ndkHelperBin
+**/.cxx
+stalkerlib/build*
