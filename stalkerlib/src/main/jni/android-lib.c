@@ -11,6 +11,11 @@
 #include <unistd.h> // read(), close()
 #include <sys/inotify.h> // inotify_init(), inotify_add_watch()
 
+static FILE* _outputFile = NULL;
+static int _inotifyFd = -1;
+static int* _watchFds = NULL;
+static int _watchFdsCount = 0;
+
 struct extra_data_t { 
 	int len;
 	char* data;
@@ -45,28 +50,62 @@ struct general_event_t *generateEvent(void *originalEvent, void *extraData) {
     return cEvent;
 }
 
+void setOutputFile(char* outputFile) {
+    _outputFile = fopen(outputFile, "a");
+}
+
+int checkArguments(int argc, char* argv[], int *pathIndex) {
+    int hasOptions = 0;
+    int hasPaths = 0;
+    for(int i = 1; i < argc; i++) {
+        if(strcmp(argv[i], "-o") == 0) { // Arguments
+            LOG(1, "Setting output file...", 0, 0);
+            setOutputFile(argv[i + 1]);
+            hasOptions = 1;
+            i++;
+        }
+        else { // Paths
+            *pathIndex = i;
+            hasPaths = 1;
+        }
+    }
+    if(hasPaths == 0) {
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
 int startLib(int argc, char **argv) {
-    LOG("Starting android...", 0, 0);
-    int inotifyFd;
-    int *watchFds;
+    int pathIndex;
+    if(checkArguments(argc, argv, &pathIndex) == FAILED) {
+        LOG(0, "Bad syntax(Correct: fs-stalker [OPTIONS] <paths>).\n");
+        return FAILED;
+    }
+
+    int pathc = argc - pathIndex;
+    char** pathv = argv + pathIndex;
+
+    LOG(0, "Starting android...\n");
     char eventsBuffer[4096];
     char eventMsg[512];
     struct dir_t* dir = NULL;
     int extraDirsSize = 0;
 
-    if (argc > 1) {
-        if(argc == 2) { // Single directory
-            dir = init(argv[1]);
+    if (pathc >= 1) {
+        if(pathc == 1) { // Single directory
+            dir = init(*pathv);
             extraDirsSize = dir != NULL ? dir->size : 0;
         }
-        watchFds = (int *) calloc(argc + extraDirsSize - 1, sizeof(int));
+        int size = pathc + extraDirsSize - 1;
+        _watchFds = (int *) calloc(size, sizeof(int));
+        _watchFdsCount = size;
     } else {
         perror("No paths provided.\n");
         return FAILED;
     }
 
-    inotifyFd = inotify_init();
-    if (inotifyFd < 0) {
+    _inotifyFd = inotify_init();
+    if (_inotifyFd < 0) {
         perror("inotify_init() failed!\n");
         switch (errno) {
             case EMFILE:
@@ -83,69 +122,69 @@ int startLib(int argc, char **argv) {
         return FAILED;
     }
 
-    for (int i = 1, j = 1 - argc; i < argc || j < extraDirsSize; i++, j++) {
+    for (int i = 1, j = 1 - pathc; i < pathc || j < extraDirsSize; i++, j++) {
         char* pathAdded;
-        if(i < argc) {
-            pathAdded = argv[i];
-            watchFds[i - 1] = inotify_add_watch(inotifyFd, pathAdded, IN_ACCESS | IN_MODIFY | IN_CREATE | IN_DELETE);
+        if(i < pathc) {
+            pathAdded = pathv[i];
+            _watchFds[i - 1] = inotify_add_watch(_inotifyFd, pathAdded, IN_ACCESS | IN_MODIFY | IN_CREATE | IN_DELETE);
         }
         else if(j < extraDirsSize) {
             pathAdded = dir->subDirs[j];
-            watchFds[i - 1] = inotify_add_watch(inotifyFd, pathAdded, IN_ACCESS | IN_MODIFY | IN_CREATE | IN_DELETE);
+            _watchFds[i - 1] = inotify_add_watch(_inotifyFd, pathAdded, IN_ACCESS | IN_MODIFY | IN_CREATE | IN_DELETE);
         }
 
-        if (watchFds < 0) {
+        if (_watchFds < 0) {
             perror("inotify_add_watch failed.\n");
             switch (errno) {
                 case EACCES:
                     perror("-> Read access to the given file is not permitted.\n");
-                    break;
+                break;
 
                 case EBADF:
                     perror("-> The given file descriptor is not valid.\n");
-                    break;
+                break;
 
                 case EFAULT:
                     perror("-> pathname points outside of the process's accessible address space.\n");
-                    break;
+                break;
 
                 case EINVAL:
                     perror("-> The given event mask contains no valid events; or mask contains both IN_MASK_ADD and IN_MASK_CREATE; or fd is not an inotify file descriptor.\n");
-                    break;
+                break;
 
                 case ENAMETOOLONG:
                     perror("-> pathname is too long.\n");
-                    break;
+                break;
 
                 case ENOENT:
                     perror("-> A directory component in pathname does not exist or is a dangling symbolic link.\n");
-                    break;
+                break;
 
                 case ENOMEM:
                     perror("-> Insufficient kernel memory was available.\n");
-                    break;
+                break;
 
                 case ENOSPC:
                     perror("-> The user limit on the total number of inotify watches was reached or the kernel failed to allocate a needed resource.\n");
-                    break;
+                break;
 
                 case ENOTDIR:
                     perror("-> mask contains IN_ONLYDIR and pathname is not a directory.\n");
-                    break;
+                break;
 
                 case EEXIST:
                     perror("-> mask contains IN_MASK_CREATE and pathname refers to a file already being watched by the same fd.\n");
-                    break;
+                break;
             }
             return FAILED;
         }
-        fprintf(stderr, "Added watch for \"%s\".\n", pathAdded);
+        LOG(1, "Added watch for \"%s\".\n", pathAdded);
     }
 
     isRunning = 1;
 
     while (isRunning) {
-        ssize_t eventsBufferSize = read(inotifyFd, eventsBuffer, sizeof(eventsBuffer));
+        ssize_t eventsBufferSize = read(_inotifyFd, eventsBuffer, sizeof(eventsBuffer));
         if (eventsBufferSize < 0) {
             perror("failed reading.\n");
             continue;
@@ -170,10 +209,10 @@ int startLib(int argc, char **argv) {
             memset(eventMsg, 0, sizeof(eventMsg));
             char *currentPath;
 
-            for (int i = 0, j = 1 - argc; i < argc || j < extraDirsSize; i++, j++) {
-                if (watchFds[i] == event->wd) {
-                    if (i < argc) {
-                        currentPath = argv[i + 1];
+            for (int i = 0, j = 1 - pathc; i < pathc || j < extraDirsSize; i++, j++) {
+                if (_watchFds[i] == event->wd) {
+                    if (i < pathc) {
+                        currentPath = pathv[i];
                     }
                     else if(j < extraDirsSize) {
                         currentPath = dir->subDirs[j];
@@ -182,9 +221,18 @@ int startLib(int argc, char **argv) {
                 }
             }
 
-            struct extra_data_t *extra = (struct extra_data_t *) calloc(1, sizeof(struct extra_data_t));
+            // struct extra_data_t *extra = (struct extra_data_t *) calloc(1, sizeof(struct extra_data_t));
             char *fullPath = (char *) calloc(strlen(currentPath) + event->len + 2, sizeof(char));
             char *fullPathPtr = fullPath;
+
+            // Add the timestamp
+            char timestamp[32] = {0};
+            c = sprintf(timestamp, "%lld", getCurrentTimeMillis());
+            char* timestampPtr = timestamp + c;
+            *(timestampPtr++) = LOG_SEPERATOR;
+
+            c = snprintf(eventMsgPtr, strlen(timestamp) + 2, "%s", timestamp);
+            eventMsgPtr += c;
 
             // Add the directory path
             c = snprintf(fullPathPtr, strlen(currentPath) + 2, "%s/", currentPath);
@@ -193,7 +241,7 @@ int startLib(int argc, char **argv) {
 
             // Add the file name(is exists)
             if (event->len) {
-                c = snprintf(fullPathPtr, event->len - 1, "%s", event->name);
+                c = snprintf(fullPathPtr, event->len, "%s", event->name);
                 fullPathPtr += c;
                 filePathLen += c;
             }
@@ -201,32 +249,34 @@ int startLib(int argc, char **argv) {
             c = snprintf(eventMsgPtr, filePathLen, "%s", fullPath);
             eventMsgPtr += c;
 
+            free(fullPath);
+
             // extra->data = fullPathPtr;
             // extra->len = filePathLen;
 
             // Add the event
             if (event->mask & IN_ACCESS) {
-                if ((eventMsgPtr - eventMsg) > 0) *(eventMsgPtr++) = '|';
+                if ((eventMsgPtr - eventMsg) > 0) *(eventMsgPtr++) = LOG_SEPERATOR;
                 c = snprintf(eventMsgPtr, 10, "IN_ACCESS");
                 eventMsgPtr += c;
             }
             if (event->mask & IN_MODIFY) {
-                if ((eventMsgPtr - eventMsg) > 0) *(eventMsgPtr++) = '|';
+                if ((eventMsgPtr - eventMsg) > 0) *(eventMsgPtr++) = LOG_SEPERATOR;
                 c = snprintf(eventMsgPtr, 10, "IN_MODIFY");
                 eventMsgPtr += c;
             }
             if (event->mask & IN_CREATE) {
-                if ((eventMsgPtr - eventMsg) > 0) *(eventMsgPtr++) = '|';
+                if ((eventMsgPtr - eventMsg) > 0) *(eventMsgPtr++) = LOG_SEPERATOR;
                 c = snprintf(eventMsgPtr, 10, "IN_CREATE");
                 eventMsgPtr += c;
             }
             if (event->mask & IN_DELETE) {
-                if ((eventMsgPtr - eventMsg) > 0) *(eventMsgPtr++) = '|';
+                if ((eventMsgPtr - eventMsg) > 0) *(eventMsgPtr++) = LOG_SEPERATOR;
                 c = snprintf(eventMsgPtr, 10, "IN_DELETE");
                 eventMsgPtr += c;
             }
 
-            *(eventMsgPtr++) = '|';
+            *(eventMsgPtr++) = LOG_SEPERATOR;
 
             // Add if the event is related to a dir or file
             if (event->mask & IN_ISDIR) {
@@ -237,9 +287,15 @@ int startLib(int argc, char **argv) {
                 eventMsgPtr += c;
             }
 
+            c = snprintf(eventMsgPtr, 3, "\n");
+            eventMsgPtr += c;
+
             *(eventMsgPtr++) = '\0';
 
-            LOG(eventMsg, 0, 0);
+            LOG(3, eventMsg);
+            if(_outputFile != NULL) {
+                LOG_FILE(_outputFile, eventMsg);
+            }
 
             // struct general_event_t *gEvent = generateEvent(event, extra);
             // free(extra->data);
@@ -251,11 +307,28 @@ int startLib(int argc, char **argv) {
     }
 
     reset();
-    for (int i = 0; i < (argc - 1); i++) {
-        inotify_rm_watch(inotifyFd, watchFds[i]);
-    }
-    free(watchFds);
-    close(inotifyFd);
+
+    closePlatform();
 
     return SUCCESS;
+}
+
+void closePlatform() {
+    if(_outputFile != NULL) {
+        fclose(_outputFile);
+        _outputFile = NULL;
+    }
+
+    if(_watchFds != NULL) {
+        for (int i = 0; i < _watchFdsCount; i++) {
+            inotify_rm_watch(_inotifyFd, _watchFds[i]);
+        }
+        free(_watchFds);
+        _watchFds = NULL;
+    }
+
+    if(_inotifyFd > 0) {
+        close(_inotifyFd);
+        _inotifyFd = -1;
+    }
 }

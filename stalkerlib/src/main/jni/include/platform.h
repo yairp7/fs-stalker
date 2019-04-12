@@ -15,4 +15,5 @@ struct general_event_t {
 } general_event_t;
 
 int startLib(int argc, char** argv);
-struct general_event_t* generateEvent(void* originalEvent, void* extraData); 
+struct general_event_t* generateEvent(void* originalEvent, void* extraData);
+void closePlatform();

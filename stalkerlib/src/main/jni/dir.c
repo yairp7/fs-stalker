@@ -2,55 +2,57 @@
 // Created by Yair Pecherer on 05/04/2019.
 //
 
-#include "dir.h"
+#include "include/dir.h"
 
 void reset() {
-    if(current != NULL) {
-        for(int i = 0; i < current->size; i++) {
-            free(current->subDirs[i]);
+    if(_current != NULL) {
+        for(int i = 0; i < _current->size; i++) {
+            free(_current->subDirs[i]);
         }
-        free(current->subDirs);
-        free(current);
+        free(_current->subDirs);
+        free(_current);
     }
 }
 
 struct dir_t* init(char* rootPath) {
-    if(current != NULL) {
+    if(_current != NULL) {
         reset();
     }
 
-    current = (struct dir_t*)calloc(1, sizeof(struct dir_t));
-    current->size = 0;
-    current->capacity = DEFAULT_NUM_OF_DIRS;
-    current->subDirs = (char**)calloc(current->capacity, sizeof(char*));
+    _current = (struct dir_t*)calloc(1, sizeof(struct dir_t));
+    _current->size = 0;
+    _current->capacity = DEFAULT_NUM_OF_DIRS;
+    _current->subDirs = (char**)calloc(_current->capacity, sizeof(char*));
+
+    LOG(1, "Listing dirs in %s...\n", rootPath);
 
     listDir(rootPath, addDir);
 
-    return current;
+    return _current;
 }
 
 static void addDir(char* dirPath) {
-    if(current != NULL) {
-        if(current->size >= current->capacity * 0.8) {
-            int newCapacity = current->capacity * 2;
+    if(_current != NULL) {
+        if(_current->size >= _current->capacity * 0.8) {
+            int newCapacity = _current->capacity * 2;
             char** newSubDirs = (char**)calloc(newCapacity, sizeof(char*));
-            current->capacity = newCapacity;
-            for(int i = 0; i < current->size; i++) {
-                newSubDirs[i] = current->subDirs[i];
+            _current->capacity = newCapacity;
+            for(int i = 0; i < _current->size; i++) {
+                newSubDirs[i] = _current->subDirs[i];
             }
-            free(current->subDirs);
-            current->subDirs = newSubDirs;
+            free(_current->subDirs);
+            _current->subDirs = newSubDirs;
         }
 
         char* dirPathCopy = (char*)calloc(strlen(dirPath) + 1, sizeof(char));
         strcpy(dirPathCopy, dirPath);
-        current->subDirs[current->size] = dirPathCopy;
-        current->size++;
+        _current->subDirs[_current->size] = dirPathCopy;
+        _current->size++;
     }
 }
 
 struct dir_t* get() {
-    return current;
+    return _current;
 }
 
 static void listDir(const char* root, void (*addDir)(char* dirPath)) {
@@ -59,12 +61,21 @@ static void listDir(const char* root, void (*addDir)(char* dirPath)) {
 
     if (!(dir = opendir(root))) return;
 
+    int rootLen = strlen(root);
+
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_DIR) {
             char path[1024];
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                 continue;
-            snprintf(path, sizeof(path), "%s/%s", root, entry->d_name);
+            char* format;
+            if(strcmp(root, ".") == 0 || root[rootLen - 1] != '/') {
+                snprintf(path, sizeof(path), "%s/%s", root, entry->d_name);
+            }
+            else {
+                snprintf(path, sizeof(path), "%s%s", root, entry->d_name);
+            }
+
             addDir(path);
             listDir(path, addDir);
         }
