@@ -8,4 +8,4 @@
 ### Run fs-stalker in one of the following ways:
 1. fs-stalker [OPTIONS] <dir_path_1> <dir_path_2> <dir_path_3> - will watch each one of the directorys specified.
 2. fs-stalker [OPTIONS] <root_dir_path> - will watch every subfolder found under the specific root directory.
-OPTIONS: -o <output_file>
+* OPTIONS: -o <output_file>
