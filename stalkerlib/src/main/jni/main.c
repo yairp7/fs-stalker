@@ -3,7 +3,7 @@
 #include "include/utils.h"
 
 #define LIB_ANDROID "./libstalker.so"
-#define LIB_LOGGING "./liblogging.so"
+#define LIB_LOGGING "liblogging.so"
 
 static struct logger_t* _logger = NULL;
 
@@ -16,7 +16,7 @@ struct logger_t {
 
 struct logger_t* initLogging() {
     if(fileExists(LIB_LOGGING) < 0) {
-        perror("initLogging() - Can't find logging library.\n");
+        LOG(0, "Can't find logging library.\n");
         return NULL;
     }
 
@@ -36,11 +36,11 @@ struct logger_t* initLogging() {
 			return _logger;
 		}
 		else {
-			perror("initLogging() - Failed getting library symbols");
+            LOG(0, "Failed getting library symbols.\n");
 		}
 	}
 	else {
-		perror("initLogging() - Failed opening library");
+        LOG(0, "Failed opening library.\n");
 	}
 
 	return NULL;
@@ -48,7 +48,7 @@ struct logger_t* initLogging() {
 
 int main(int argc, char* argv[]) {
     if(fileExists(LIB_ANDROID) < 0) {
-        perror("Can't find android library.\n");
+        LOG(0, "Can't find android library.\n");
         return 1;
     }
 
@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
     char currentUser[32];
     getCurrentUser(currentUser, 32);
 
-    fprintf(stderr, "Stalker v1[Running as %s]\n", currentUser);
+    LOG(0, "Stalker v1[Running as %s]\n", currentUser);
 
 	void* handle = dlopen(LIB_ANDROID, RTLD_NOW|RTLD_GLOBAL);
 	if(handle != NULL)
@@ -66,19 +66,19 @@ int main(int argc, char* argv[]) {
 
 		if(startLib) {
 			if(startLib(argc, argv) == FAILED) {
-				perror("module failed.\n"); 
+                LOG(0, "module failed.\n");
 				dlclose(handle);
 				return 1;
 			}
 		}
 		else {
-			fprintf(stderr, "failed finding symbol - %s\n", dlerror()); 
+            LOG(0, "failed finding symbol - %s\n", dlerror());
 			dlclose(handle);
 			exit(1);
 		}
 	}
 	else {
-		perror("failed loading library.\n"); 
+        LOG(0, "failed loading library.\n");
 		exit(1);
 	}
 	dlclose(handle);

@@ -11,7 +11,7 @@ void LOG(const int level, const char *format, ...) {
     snprintf(finalFormat, finalFormatLength, "%s %s", formatPrefix, format);
     va_list args;
     va_start(args, format);
-    vprintf(finalFormat, args);
+    vfprintf(stderr, finalFormat, args);
     va_end(args);
 }
 

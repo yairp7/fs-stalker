@@ -59,7 +59,7 @@ int checkArguments(int argc, char* argv[], int *pathIndex) {
     int hasPaths = 0;
     for(int i = 1; i < argc; i++) {
         if(strcmp(argv[i], "-o") == 0) { // Arguments
-            LOG(1, "Setting output file...", 0, 0);
+            LOG(0, "Setting output file...\n");
             setOutputFile(argv[i + 1]);
             hasOptions = 1;
             i++;
@@ -100,23 +100,23 @@ int startLib(int argc, char **argv) {
         _watchFds = (int *) calloc(size, sizeof(int));
         _watchFdsCount = size;
     } else {
-        perror("No paths provided.\n");
+        fprintf(stderr, "No paths provided.\n");
         return FAILED;
     }
 
     _inotifyFd = inotify_init();
     if (_inotifyFd < 0) {
-        perror("inotify_init() failed!\n");
+        fprintf(stderr, "inotify_init() failed!\n");
         switch (errno) {
             case EMFILE:
-                perror("-> The user limit on the total number of inotify instances has been reached.\n");
-                perror("-> The per-process limit on the number of open file descriptors has been reached.\n");
+                fprintf(stderr, "-> The user limit on the total number of inotify instances has been reached.\n");
+                fprintf(stderr, "-> The per-process limit on the number of open file descriptors has been reached.\n");
                 break;
             case ENFILE:
-                perror("-> The system-wide limit on the total number of open files has been reached.\n");
+                fprintf(stderr, "-> The system-wide limit on the total number of open files has been reached.\n");
                 break;
             case ENOMEM:
-                perror("-> Insufficient kernel memory is available.\n");
+                fprintf(stderr, "-> Insufficient kernel memory is available.\n");
                 break;
         }
         return FAILED;
@@ -134,51 +134,51 @@ int startLib(int argc, char **argv) {
         }
 
         if (_watchFds < 0) {
-            perror("inotify_add_watch failed.\n");
+            fprintf(stderr, "inotify_add_watch failed.\n");
             switch (errno) {
                 case EACCES:
-                    perror("-> Read access to the given file is not permitted.\n");
+                    fprintf(stderr, "-> Read access to the given file is not permitted.\n");
                 break;
 
                 case EBADF:
-                    perror("-> The given file descriptor is not valid.\n");
+                    fprintf(stderr, "-> The given file descriptor is not valid.\n");
                 break;
 
                 case EFAULT:
-                    perror("-> pathname points outside of the process's accessible address space.\n");
+                    fprintf(stderr, "-> pathname points outside of the process's accessible address space.\n");
                 break;
 
                 case EINVAL:
-                    perror("-> The given event mask contains no valid events; or mask contains both IN_MASK_ADD and IN_MASK_CREATE; or fd is not an inotify file descriptor.\n");
+                    fprintf(stderr, "-> The given event mask contains no valid events; or mask contains both IN_MASK_ADD and IN_MASK_CREATE; or fd is not an inotify file descriptor.\n");
                 break;
 
                 case ENAMETOOLONG:
-                    perror("-> pathname is too long.\n");
+                    fprintf(stderr, "-> pathname is too long.\n");
                 break;
 
                 case ENOENT:
-                    perror("-> A directory component in pathname does not exist or is a dangling symbolic link.\n");
+                    fprintf(stderr, "-> A directory component in pathname does not exist or is a dangling symbolic link.\n");
                 break;
 
                 case ENOMEM:
-                    perror("-> Insufficient kernel memory was available.\n");
+                    fprintf(stderr, "-> Insufficient kernel memory was available.\n");
                 break;
 
                 case ENOSPC:
-                    perror("-> The user limit on the total number of inotify watches was reached or the kernel failed to allocate a needed resource.\n");
+                    fprintf(stderr, "-> The user limit on the total number of inotify watches was reached or the kernel failed to allocate a needed resource.\n");
                 break;
 
                 case ENOTDIR:
-                    perror("-> mask contains IN_ONLYDIR and pathname is not a directory.\n");
+                    fprintf(stderr, "-> mask contains IN_ONLYDIR and pathname is not a directory.\n");
                 break;
 
                 case EEXIST:
-                    perror("-> mask contains IN_MASK_CREATE and pathname refers to a file already being watched by the same fd.\n");
+                    fprintf(stderr, "-> mask contains IN_MASK_CREATE and pathname refers to a file already being watched by the same fd.\n");
                 break;
             }
             return FAILED;
         }
-        LOG(1, "Added watch for \"%s\".\n", pathAdded);
+        LOG(0, "Added watch for \"%s\".\n", pathAdded);
     }
 
     isRunning = 1;
@@ -186,7 +186,7 @@ int startLib(int argc, char **argv) {
     while (isRunning) {
         ssize_t eventsBufferSize = read(_inotifyFd, eventsBuffer, sizeof(eventsBuffer));
         if (eventsBufferSize < 0) {
-            perror("failed reading.\n");
+            LOG(0, "failed reading.\n");
             continue;
         }
 
@@ -199,7 +199,7 @@ int startLib(int argc, char **argv) {
 
             // Check if we have enough space
             if ((buffPtrEnd - buffPtr) < sizeof(struct inotify_event)) {
-                perror("Not enough room for the inotify_event event, breaking.\n");
+                fprintf(stderr, "Not enough room for the inotify_event event, breaking.\n");
                 break;
             }
 
@@ -287,12 +287,10 @@ int startLib(int argc, char **argv) {
                 eventMsgPtr += c;
             }
 
-            c = snprintf(eventMsgPtr, 3, "\n");
-            eventMsgPtr += c;
+            *(eventMsgPtr++) = '\n';
 
-            *(eventMsgPtr++) = '\0';
+            LOG(0, "%sֿ", eventMsg);
 
-            LOG(3, eventMsg);
             if(_outputFile != NULL) {
                 LOG_FILE(_outputFile, eventMsg);
             }

@@ -24,8 +24,6 @@ struct dir_t* init(char* rootPath) {
     _current->capacity = DEFAULT_NUM_OF_DIRS;
     _current->subDirs = (char**)calloc(_current->capacity, sizeof(char*));
 
-    LOG(1, "Listing dirs in %s...\n", rootPath);
-
     listDir(rootPath, addDir);
 
     return _current;
@@ -59,9 +57,13 @@ static void listDir(const char* root, void (*addDir)(char* dirPath)) {
     DIR *dir;
     struct dirent *entry;
 
-    if (!(dir = opendir(root))) return;
+    LOG(0, "Listing dirs in %s.\n", root);
 
-    int rootLen = strlen(root);
+    if (!(dir = opendir(root))) {
+        return;
+    }
+
+    size_t rootLen = strlen(root);
 
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_DIR) {
@@ -75,6 +77,8 @@ static void listDir(const char* root, void (*addDir)(char* dirPath)) {
             else {
                 snprintf(path, sizeof(path), "%s%s", root, entry->d_name);
             }
+
+            LOG(0, "Directory found: \"%s\".\n", path);
 
             addDir(path);
             listDir(path, addDir);
