@@ -1,0 +1,106 @@
+apply plugin: 'com.android.library'
+apply plugin: 'maven-publish'
+apply plugin: 'com.jfrog.bintray'
+
+android {
+    compileSdkVersion 28
+
+    defaultConfig {
+        minSdkVersion 16
+        targetSdkVersion 28
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            moduleName "stalker"
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
+
+        sourceSets {
+            main {
+                jni.srcDirs = ['src/main/jni']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            path 'src/main/jni/Android.mk'
+        }
+    }
+}
+
+task ndkBuild(type: Exec) {
+    workingDir file('build').absolutePath
+
+    inputs.files(fileTree("src/main/jni"))
+    inputs.files.each {File file ->
+        println "file ${file.absolutePath}"
+    }
+
+    outputs.dir 'build/libs'
+
+    def ndkDir = android.ndkDirectory
+
+    println "NDK Directory: " + ndkDir
+
+    if (ndkDir == null) {
+        def localProperties = new Properties()
+        localProperties.load(project.rootProject.file('local.properties').newDataInputStream())
+        ndkDir = localProperties.getProperty('ndk.dir')
+    }
+
+    if (org.gradle.internal.os.OperatingSystem.current().isWindows()) {
+        commandLine "$ndkDir/ndk-build.cmd", "NDK_LIBS_OUT=$workingDir/libs", "NDK_OUT=$workingDir/obj", '-C', file('src/main/jni').absolutePath
+    } else {
+        commandLine "$ndkDir/ndk-build", "NDK_LIBS_OUT=$workingDir/libs", "NDK_OUT=$workingDir/obj", '-C', file('src/main/jni').absolutePath
+    }
+}
+
+def stalkerLib = project(':stalkerlib')
+def tmpBuildDir = stalkerLib.buildDir.absolutePath
+def buildLibsDir = tmpBuildDir + '/libs'
+def assetsDir = 'src/main/assets'
+
+task copyToAssets(type: Copy) {
+    println "Copying " + buildLibsDir + " to assets directory"
+    from buildLibsDir
+    into assetsDir
+}
+
+task cleanAndAssetsClean(type: Delete) {
+    println "Cleaning build files and assets directory"
+    delete assetsDir
+    delete buildLibsDir
+}
+
+build.finalizedBy(ndkBuild)
+assemble.finalizedBy(ndkBuild)
+
+build.finalizedBy(copyToAssets)
+assemble.finalizedBy(copyToAssets)
+
+clean.finalizedBy(cleanAndAssetsClean)
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.android.support:appcompat-v7:28.0.0'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+}
+
+repositories {
+    google()
+    jcenter()
+}
+
