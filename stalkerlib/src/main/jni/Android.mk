@@ -1,7 +1,9 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_MODULE := libstalker
+LOCAL_LDLIBS := -llog
+
+LOCAL_MODULE := libfsmonitor
 LOCAL_MODULE_TAGS := optional
 
 # LOCAL_FORCE_STATIC_EXECUTABLE := true
@@ -36,11 +38,13 @@ LOCAL_LDFLAGS += -shared
 # compile library
 include $(BUILD_SHARED_LIBRARY)
 
-###################################
+#################################
 
 include $(CLEAR_VARS)
 
-LOCAL_MODULE := fs-stalker
+LOCAL_LDLIBS := -llog
+
+LOCAL_MODULE := fs-monitor
 LOCAL_MODULE_TAGS := optional
 
 LOCAL_FORCE_STATIC_EXECUTABLE := true

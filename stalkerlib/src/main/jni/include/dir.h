@@ -12,8 +12,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "utils.h"
-
 #define DEFAULT_NUM_OF_DIRS 10
 
 struct dir_t {
@@ -22,13 +20,8 @@ struct dir_t {
     int capacity;
 } dir_t;
 
-static struct dir_t* _current;
-
 struct dir_t* init(char* rootPath);
 struct dir_t* get();
 void reset();
-
-static void listDir(const char* root, void (*addDir)(char* dirPath));
-static void addDir(char* dirPath);
 
 #endif

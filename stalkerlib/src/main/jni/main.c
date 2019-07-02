@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <dlfcn.h>
+#include <fcntl.h>
+#include "include/platform.h"
 #include "include/utils.h"
 
-#define LIB_ANDROID "./libstalker.so"
+#define LIB_ANDROID "./libfsmonitor.so"
 #define LIB_LOGGING "liblogging.so"
 
 static struct logger_t* _logger = NULL;
@@ -46,6 +48,12 @@ struct logger_t* initLogging() {
 	return NULL;
 }
 
+void callback(event_t* event) {
+    if(event) {
+        // DO NOTHING
+    }
+}
+
 int main(int argc, char* argv[]) {
     if(fileExists(LIB_ANDROID) < 0) {
         LOG(0, "Can't find android library.\n");
@@ -57,18 +65,24 @@ int main(int argc, char* argv[]) {
     char currentUser[32];
     getCurrentUser(currentUser, 32);
 
-    LOG(0, "Stalker v1[Running as %s]\n", currentUser);
+     LOG(0, "FSStalker v0.2[Running as %s]\n", currentUser);
 
 	void* handle = dlopen(LIB_ANDROID, RTLD_NOW|RTLD_GLOBAL);
 	if(handle != NULL)
 	{
 		int (*startLib)(int, char**) = (int (*)(int, char**))dlsym(handle, "startLib");
+        int (*registerCallback)(f_callback) = (int (*)(f_callback))dlsym(handle, "registerCallback");
 
 		if(startLib) {
 			if(startLib(argc, argv) == FAILED) {
                 LOG(0, "module failed.\n");
 				dlclose(handle);
 				return 1;
+			}
+			else {
+			    if(registerCallback) {
+                    registerCallback(callback);
+			    }
 			}
 		}
 		else {

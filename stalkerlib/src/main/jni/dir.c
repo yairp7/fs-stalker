@@ -3,6 +3,13 @@
 //
 
 #include "include/dir.h"
+#include "include/utils.h"
+#include "include/platform.h"
+
+static struct dir_t* _current;
+
+void listDir(const char* root, void (*addDir)(char* dirPath));
+void addDir(char* dirPath);
 
 void reset() {
     if(_current != NULL) {
@@ -24,12 +31,14 @@ struct dir_t* init(char* rootPath) {
     _current->capacity = DEFAULT_NUM_OF_DIRS;
     _current->subDirs = (char**)calloc(_current->capacity, sizeof(char*));
 
+    addDir(rootPath);
+
     listDir(rootPath, addDir);
 
     return _current;
 }
 
-static void addDir(char* dirPath) {
+void addDir(char* dirPath) {
     if(_current != NULL) {
         if(_current->size >= _current->capacity * 0.8) {
             int newCapacity = _current->capacity * 2;
@@ -53,24 +62,35 @@ struct dir_t* get() {
     return _current;
 }
 
-static void listDir(const char* root, void (*addDir)(char* dirPath)) {
+int checkIfTmpDir(const char* path) {
+    if(strstr(path, TMP_FOLDER) != NULL) {
+        return 0;
+    }
+    return -1;
+}
+
+void listDir(const char* root, void (*addDir)(char* dirPath)) {
     DIR *dir;
     struct dirent *entry;
-
-    LOG(0, "Listing dirs in %s.\n", root);
 
     if (!(dir = opendir(root))) {
         return;
     }
+
+    if(checkIfTmpDir(root) == 0) {
+        closedir(dir);
+        return;
+    }
+
+    // LOG(0, "Listing dirs in %s.\n", root);
 
     size_t rootLen = strlen(root);
 
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_DIR) {
             char path[1024];
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 || checkIfTmpDir(entry->d_name) == 0)
                 continue;
-            char* format;
             if(strcmp(root, ".") == 0 || root[rootLen - 1] != '/') {
                 snprintf(path, sizeof(path), "%s/%s", root, entry->d_name);
             }

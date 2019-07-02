@@ -12,6 +12,6 @@ gradlew*
 **/*.iml
 **/ndkHelperBin
 **/.cxx
-stalkerlib/build*
+stalkerlib/build/
 stalkerlib/src/main/assets
 stalkerlib/stalker-lib

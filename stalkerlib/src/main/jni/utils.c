@@ -27,9 +27,9 @@ long long getCurrentTimeMillis() {
 
 int fileExists(char* filename) {
     if(access(filename, F_OK) != -1) {
-        return 0;
+        return SUCCESS;
     }
-    return -1;
+    return FAILED;
 }
 
 void getCurrentUser(char *buf, size_t size) {
